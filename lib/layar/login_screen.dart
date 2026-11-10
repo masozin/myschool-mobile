@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../layanan/api_client.dart';
 import '../layanan/sesi.dart';
 
-/// Layar masuk: email + kata sandi akun web MySchool.
+/// Layar masuk: email atau NIP + kata sandi akun web MySchool.
 /// Alamat server dapat diganti (untuk pengujian server lokal).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _masuk() async {
     if (_email.text.trim().isEmpty || _kataSandi.text.isEmpty) {
-      setState(() => _galat = 'Isi email dan kata sandi dulu.');
+      setState(() => _galat = 'Isi email/NIP dan kata sandi dulu.');
       return;
     }
     setState(() {
@@ -93,10 +93,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 32),
                 TextField(
                   controller: _email,
-                  keyboardType: TextInputType.emailAddress,
+                  keyboardType: TextInputType.text,
                   decoration: const InputDecoration(
-                    labelText: 'Email',
-                    prefixIcon: Icon(Icons.email_outlined),
+                    labelText: 'Email atau NIP',
+                    hintText: 'Guru masuk dengan NIP-nya',
+                    prefixIcon: Icon(Icons.badge_outlined),
                     border: OutlineInputBorder(),
                   ),
                 ),
