@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../layanan/sesi.dart';
+import '../konfigurasi.dart';
+import '../model/info.dart';
 import '../model/jadwal.dart';
 import 'komponen.dart';
 
@@ -20,6 +22,7 @@ class BerandaScreen extends StatefulWidget {
 
 class _BerandaScreenState extends State<BerandaScreen> {
   JadwalHariIni? _hariIni;
+  InfoHariIni? _info;
   bool _memuat = true;
   String? _galatJadwal;
 
@@ -42,6 +45,15 @@ class _BerandaScreenState extends State<BerandaScreen> {
       setState(() => _galatJadwal = pesanJadwalDariGalat(e));
     } finally {
       if (mounted) setState(() => _memuat = false);
+    }
+    // Info hari ini (kaldik & ulang tahun) — kegagalan diabaikan
+    // diam-diam: kartunya cukup tidak ditampilkan.
+    try {
+      final dataInfo = await context.read<Sesi>().api.getJson('/info-hari-ini');
+      if (!mounted) return;
+      setState(() => _info = InfoHariIni.fromJson(dataInfo));
+    } catch (_) {
+      // Abaikan.
     }
   }
 
@@ -152,6 +164,20 @@ class _BerandaScreenState extends State<BerandaScreen> {
                 onTap: () => widget.onBukaTab(1),
               ),
               const SizedBox(height: 22),
+
+              // ── Info hari ini: ucapan, kaldik, ulang tahun ──
+              if (_info?.ultahSaya != null) ...[
+                _KartuUcapanSaya(ultah: _info!.ultahSaya!),
+                const SizedBox(height: 16),
+              ],
+              if (_info != null && _info!.kaldik.isNotEmpty) ...[
+                _KartuKaldik(daftar: _info!.kaldik),
+                const SizedBox(height: 16),
+              ],
+              if (_info != null && _info!.ulangTahun.isNotEmpty) ...[
+                _KartuUlangTahun(daftar: _info!.ulangTahun),
+                const SizedBox(height: 16),
+              ],
 
               // ── Jadwal hari ini ───────────────────────────
               const JudulBagian(
@@ -412,6 +438,295 @@ class _MenuCepat extends StatelessWidget {
               fontSize: 11,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Kartu perayaan bergradasi bila yang berulang tahun adalah
+/// pengguna sendiri — ucapan resmi + doa dari server.
+class _KartuUcapanSaya extends StatelessWidget {
+  const _KartuUcapanSaya({required this.ultah});
+
+  final UltahHariIni ultah;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          colors: [Colors.pink.shade400, Colors.orange.shade400],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.pink.withValues(alpha: 0.3),
+            blurRadius: 18,
+            offset: const Offset(0, 9),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.cake, color: Colors.white, size: 24),
+              SizedBox(width: 9),
+              Text(
+                'HARI ISTIMEWA ANDA',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            ultah.ucapanJudul ?? 'Selamat Ulang Tahun, ${ultah.nama}!',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17.5,
+              fontWeight: FontWeight.w800,
+              height: 1.3,
+            ),
+          ),
+          if (ultah.ucapanDoa != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              ultah.ucapanDoa!,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.94),
+                fontSize: 13,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Kartu kegiatan Kalender Pendidikan yang berlangsung hari ini.
+class _KartuKaldik extends StatelessWidget {
+  const _KartuKaldik({required this.daftar});
+
+  final List<KaldikHariIni> daftar;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    return KartuModern(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  Icons.event_note,
+                  size: 20,
+                  color: Colors.amber.shade800,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  'Kalender Pendidikan Hari Ini',
+                  style: tema.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final k in daftar) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          k.kegiatan,
+                          style: tema.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        if (k.tanggalMulai != null)
+                          Text(
+                            k.tanggalMulai == k.tanggalSelesai
+                                ? formatTanggalDariApi(k.tanggalMulai)
+                                : '${formatTanggalDariApi(k.tanggalMulai)} – ${formatTanggalDariApi(k.tanggalSelesai)}',
+                            style: tema.textTheme.bodySmall?.copyWith(
+                              color: tema.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  if (k.isLibur)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tema.colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(99),
+                      ),
+                      child: Text(
+                        'LIBUR',
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w800,
+                          color: tema.colorScheme.onErrorContainer,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Kartu daftar guru yang berulang tahun hari ini.
+class _KartuUlangTahun extends StatelessWidget {
+  const _KartuUlangTahun({required this.daftar});
+
+  final List<UltahHariIni> daftar;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    return KartuModern(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.pink.shade50,
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(
+                  Icons.cake_outlined,
+                  size: 20,
+                  color: Colors.pink.shade600,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  'Ulang Tahun Hari Ini',
+                  style: tema.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          for (final u in daftar)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 19,
+                    backgroundColor: tema.colorScheme.primaryContainer,
+                    child: Text(
+                      u.inisial,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: tema.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                u.nama,
+                                style: tema.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (u.saya) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: tema.colorScheme.primary,
+                                  borderRadius: BorderRadius.circular(99),
+                                ),
+                                child: const Text(
+                                  'ANDA',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                        Text(
+                          [
+                            if (u.jabatan.isNotEmpty) u.jabatan,
+                            if (u.usia != null) 'ke-${u.usia}',
+                          ].join(' • '),
+                          style: tema.textTheme.bodySmall?.copyWith(
+                            color: tema.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.celebration,
+                    size: 19,
+                    color: Colors.pink.shade400,
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
