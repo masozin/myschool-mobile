@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../layanan/api_client.dart';
 import '../layanan/sesi.dart';
 import '../model/presensi.dart';
+import 'komponen.dart';
 import 'presensi_isi_screen.dart';
 
 /// Pilih rombel untuk presensi — daftar mengikuti peran pengguna
@@ -33,11 +34,13 @@ class _PresensiRombelScreenState extends State<PresensiRombelScreen> {
       _galat = null;
     });
     try {
-      final data =
-          await context.read<Sesi>().api.getJson('/presensi/rombel-saya');
+      final data = await context.read<Sesi>().api.getJson(
+        '/presensi/rombel-saya',
+      );
       setState(() {
         _semester = SemesterRingkas.fromJson(
-            data['semester'] as Map<String, dynamic>);
+          data['semester'] as Map<String, dynamic>,
+        );
         _rombel = (data['rombel'] as List<dynamic>)
             .map((e) => RombelRingkas.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -54,91 +57,120 @@ class _PresensiRombelScreenState extends State<PresensiRombelScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Presensi — Pilih Rombel')),
+      appBar: AppBar(title: const Text('Presensi')),
       body: _memuat
           ? const Center(child: CircularProgressIndicator())
           : _galat != null
-              ? _GalatTampil(pesan: _galat!, onCobaLagi: _muat)
-              : RefreshIndicator(
-                  onRefresh: _muat,
-                  child: ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      if (_semester != null)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            'Semester ${_semester!.label}',
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
+          ? TampilGalat(pesan: _galat!, onUlang: _muat)
+          : RefreshIndicator(
+              onRefresh: _muat,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+                children: [
+                  const JudulBagian(
+                    teks: 'Pilih Rombel',
+                    ikon: Icons.meeting_room,
+                  ),
+                  if (_semester != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 12),
+                      child: Text(
+                        'Semester ${_semester!.label} — ketuk rombel untuk mengisi presensinya.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                      if (_rombel.isEmpty)
-                        const Padding(
-                          padding: EdgeInsets.only(top: 48),
-                          child: Center(
+                      ),
+                    ),
+                  if (_rombel.isEmpty)
+                    const PesanKosong(
+                      ikon: Icons.meeting_room_outlined,
+                      teks:
+                          'Tidak ada rombel yang dapat Anda lihat pada semester ini.',
+                    ),
+                  for (final r in _rombel) ...[
+                    KartuModern(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PresensiIsiScreen(rombel: r),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primaryContainer,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             child: Text(
-                                'Tidak ada rombel yang dapat Anda lihat pada semester ini.'),
-                          ),
-                        ),
-                      for (final r in _rombel)
-                        Card(
-                          child: ListTile(
-                            leading: CircleAvatar(
-                              child: Text('${r.tingkat ?? '-'}'),
-                            ),
-                            title: Text(r.namaRombel),
-                            subtitle: Text(
-                              [
-                                if (r.waliKelas != null)
-                                  'Wali: ${r.waliKelas}',
-                                if (r.namaSekolah != null) r.namaSekolah!,
-                              ].join(' · '),
-                            ),
-                            trailing: Chip(
-                              label: Text(
-                                  r.bolehIsi ? 'Bisa diisi' : 'Lihat saja'),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => PresensiIsiScreen(rombel: r),
+                              '${r.tingkat ?? '-'}',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onPrimaryContainer,
                               ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                ),
-    );
-  }
-}
-
-class _GalatTampil extends StatelessWidget {
-  const _GalatTampil({required this.pesan, required this.onCobaLagi});
-
-  final String pesan;
-  final Future<void> Function() onCobaLagi;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.error_outline, size: 48),
-            const SizedBox(height: 12),
-            Text(pesan, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton(
-              onPressed: onCobaLagi,
-              child: const Text('Coba lagi'),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  r.namaRombel,
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(fontWeight: FontWeight.w800),
+                                ),
+                                if (r.waliKelas != null)
+                                  Text(
+                                    'Wali: ${r.waliKelas}',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 9,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: r.bolehIsi
+                                  ? Colors.green.shade50
+                                  : Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(99),
+                            ),
+                            child: Text(
+                              r.bolehIsi ? 'Bisa diisi' : 'Lihat saja',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: r.bolehIsi
+                                    ? Colors.green.shade800
+                                    : Colors.orange.shade800,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              ),
             ),
-          ],
-        ),
-      ),
     );
   }
 }

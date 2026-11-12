@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../layanan/api_client.dart';
 import '../layanan/sesi.dart';
 import '../model/siswa.dart';
+import 'komponen.dart';
 import 'siswa_detail_screen.dart';
 
 /// Daftar siswa sekolah pengguna pada semester aktif.
@@ -77,13 +78,11 @@ class _SiswaDaftarScreenState extends State<SiswaDaftarScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
             child: TextField(
               decoration: const InputDecoration(
                 hintText: 'Cari nama, NISN, atau NIS…',
                 prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-                isDense: true,
               ),
               onChanged: (v) => setState(() => _cari = v),
             ),
@@ -119,48 +118,90 @@ class _SiswaDaftarScreenState extends State<SiswaDaftarScreen> {
             child: _memuat
                 ? const Center(child: CircularProgressIndicator())
                 : _galat != null
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.error_outline, size: 48),
+                          const SizedBox(height: 12),
+                          Text(_galat!, textAlign: TextAlign.center),
+                          const SizedBox(height: 16),
+                          FilledButton(
+                            onPressed: _muat,
+                            child: const Text('Coba lagi'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : _tampil.isEmpty
+                ? const PesanKosong(
+                    ikon: Icons.person_search_outlined,
+                    teks: 'Tidak ada siswa cocok dengan saringan ini.',
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(18, 6, 18, 16),
+                    itemCount: _tampil.length,
+                    itemBuilder: (ctx, i) {
+                      final s = _tampil[i];
+                      final tema = Theme.of(ctx);
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: KartuModern(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SiswaDetailScreen(siswaId: s.id),
+                            ),
+                          ),
+                          child: Row(
                             children: [
-                              const Icon(Icons.error_outline, size: 48),
-                              const SizedBox(height: 12),
-                              Text(_galat!, textAlign: TextAlign.center),
-                              const SizedBox(height: 16),
-                              FilledButton(
-                                onPressed: _muat,
-                                child: const Text('Coba lagi'),
+                              CircleAvatar(
+                                backgroundColor:
+                                    tema.colorScheme.primaryContainer,
+                                child: Text(
+                                  s.inisial,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    color: tema.colorScheme.onPrimaryContainer,
+                                  ),
+                                ),
                               ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      s.namaSiswa,
+                                      style: tema.textTheme.titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                    ),
+                                    Text(
+                                      [
+                                        if (s.rombel != null)
+                                          s.rombel!.namaRombel,
+                                        if (s.nisn != null) 'NISN ${s.nisn}',
+                                      ].join(' · '),
+                                      style: tema.textTheme.bodySmall?.copyWith(
+                                        color:
+                                            tema.colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.chevron_right),
                             ],
                           ),
                         ),
-                      )
-                    : _tampil.isEmpty
-                        ? const Center(child: Text('Tidak ada siswa cocok.'))
-                        : ListView.builder(
-                            itemCount: _tampil.length,
-                            itemBuilder: (ctx, i) {
-                              final s = _tampil[i];
-                              return ListTile(
-                                leading: CircleAvatar(child: Text(s.inisial)),
-                                title: Text(s.namaSiswa),
-                                subtitle: Text([
-                                  if (s.rombel != null) s.rombel!.namaRombel,
-                                  if (s.nisn != null) 'NISN ${s.nisn}',
-                                ].join(' · ')),
-                                trailing: const Icon(Icons.chevron_right),
-                                onTap: () => Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        SiswaDetailScreen(siswaId: s.id),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                      );
+                    },
+                  ),
           ),
           if (!_memuat && _galat == null)
             Padding(

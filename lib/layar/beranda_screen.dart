@@ -2,12 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../layanan/sesi.dart';
-import 'presensi_rombel_screen.dart';
-import 'siswa_daftar_screen.dart';
+import '../model/jadwal.dart';
+import 'komponen.dart';
 
-/// Beranda setelah masuk: sapaan pengguna + dua menu utama.
-class BerandaScreen extends StatelessWidget {
-  const BerandaScreen({super.key});
+/// Beranda modern: sapaan, kartu "saat ini" bergradasi, linimasa
+/// jadwal mengajar hari ini, dan menu cepat ke tab lain.
+class BerandaScreen extends StatefulWidget {
+  const BerandaScreen({super.key, required this.onBukaTab});
+
+  /// Berpindah tab pada rangka utama (0 Beranda, 1 Jadwal,
+  /// 2 Presensi, 3 Siswa).
+  final ValueChanged<int> onBukaTab;
+
+  @override
+  State<BerandaScreen> createState() => _BerandaScreenState();
+}
+
+class _BerandaScreenState extends State<BerandaScreen> {
+  JadwalHariIni? _hariIni;
+  bool _memuat = true;
+  String? _galatJadwal;
+
+  @override
+  void initState() {
+    super.initState();
+    _muat();
+  }
+
+  Future<void> _muat() async {
+    try {
+      final data = await context.read<Sesi>().api.getJson('/jadwal/hari-ini');
+      if (!mounted) return;
+      setState(() {
+        _hariIni = JadwalHariIni.fromJson(data);
+        _galatJadwal = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _galatJadwal = pesanJadwalDariGalat(e));
+    } finally {
+      if (mounted) setState(() => _memuat = false);
+    }
+  }
+
+  String get _sapaan {
+    final jam = DateTime.now().hour;
+    if (jam < 11) return 'Selamat pagi';
+    if (jam < 15) return 'Selamat siang';
+    if (jam < 19) return 'Selamat sore';
+    return 'Selamat malam';
+  }
 
   Future<void> _keluar(BuildContext context) async {
     final yakin = await showDialog<bool>(
@@ -15,7 +59,8 @@ class BerandaScreen extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         title: const Text('Keluar dari aplikasi?'),
         content: const Text(
-            'Anda perlu masuk lagi dengan email dan kata sandi untuk memakai aplikasi ini.'),
+          'Anda perlu masuk lagi dengan email/NIP dan kata sandi untuk memakai aplikasi ini.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -39,95 +84,288 @@ class BerandaScreen extends StatelessWidget {
     final tema = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('MySchool'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            tooltip: 'Keluar',
-            onPressed: () => _keluar(context),
-          ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _muat,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
+            children: [
+              // ── Sapaan ────────────────────────────────────
+              Row(
                 children: [
                   CircleAvatar(
-                    radius: 28,
-                    backgroundColor: tema.colorScheme.primaryContainer,
+                    radius: 24,
+                    backgroundColor: tema.colorScheme.primary,
                     child: Text(
                       pengguna.inisial,
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: tema.colorScheme.onPrimaryContainer,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
+                          _sapaan,
+                          style: tema.textTheme.bodySmall?.copyWith(
+                            color: tema.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
                           pengguna.nama,
-                          style: tema.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
+                          style: tema.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 17,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         if (pengguna.ptk?.namaSekolah != null)
-                          Text(pengguna.ptk!.namaSekolah!),
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 6,
-                          children: [
-                            for (final peran in pengguna.peran)
-                              Chip(
-                                label: Text(peran),
-                                visualDensity: VisualDensity.compact,
-                              ),
-                          ],
-                        ),
+                          Text(
+                            pengguna.ptk!.namaSekolah!,
+                            style: tema.textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                       ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.logout),
+                    tooltip: 'Keluar',
+                    onPressed: () => _keluar(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+
+              // ── Kartu saat ini ────────────────────────────
+              _KartuSaatIni(
+                hariIni: _hariIni,
+                memuat: _memuat,
+                galat: _galatJadwal,
+                onTap: () => widget.onBukaTab(1),
+              ),
+              const SizedBox(height: 22),
+
+              // ── Jadwal hari ini ───────────────────────────
+              const JudulBagian(
+                teks: 'Jadwal Mengajar Hari Ini',
+                ikon: Icons.schedule,
+              ),
+              const SizedBox(height: 10),
+              if (_memuat)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 22),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_galatJadwal != null)
+                KartuModern(
+                  child: Text(
+                    _galatJadwal!,
+                    style: tema.textTheme.bodyMedium?.copyWith(
+                      color: tema.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              else
+                LinimasaJadwal(
+                  daftar: _hariIni?.daftar ?? const [],
+                  teksKosong: 'Tidak ada jadwal mengajar hari ini.',
+                ),
+              const SizedBox(height: 10),
+
+              // ── Menu cepat ────────────────────────────────
+              const JudulBagian(teks: 'Menu Cepat', ikon: Icons.grid_view),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _MenuCepat(
+                      ikon: Icons.calendar_month,
+                      judul: 'Jadwal',
+                      keterangan: 'Hari ini & seminggu',
+                      onTap: () => widget.onBukaTab(1),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MenuCepat(
+                      ikon: Icons.fact_check,
+                      judul: 'Presensi',
+                      keterangan: 'Isi kehadiran siswa',
+                      onTap: () => widget.onBukaTab(2),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _MenuCepat(
+                      ikon: Icons.groups,
+                      judul: 'Siswa',
+                      keterangan: 'Daftar & biodata',
+                      onTap: () => widget.onBukaTab(3),
                     ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
-          const SizedBox(height: 16),
-          _MenuKartu(
-            ikon: Icons.fact_check_outlined,
-            judul: 'Presensi',
-            keterangan:
-                'Isi dan periksa kehadiran siswa rombel Anda per tanggal.',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const PresensiRombelScreen()),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _MenuKartu(
-            ikon: Icons.people_outline,
-            judul: 'Data Siswa',
-            keterangan: 'Lihat daftar dan biodata siswa di sekolah Anda.',
-            onTap: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SiswaDaftarScreen()),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _MenuKartu extends StatelessWidget {
-  const _MenuKartu({
+/// Kartu pahlawan bergradasi: keadaan jadwal tepat saat ini.
+class _KartuSaatIni extends StatelessWidget {
+  const _KartuSaatIni({
+    required this.hariIni,
+    required this.memuat,
+    required this.galat,
+    required this.onTap,
+  });
+
+  final JadwalHariIni? hariIni;
+  final bool memuat;
+  final String? galat;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tema = Theme.of(context);
+    String judul = 'Memuat jadwal…';
+    String keterangan = '';
+    IconData ikon = Icons.schedule;
+
+    final data = hariIni;
+    if (!memuat && galat != null) {
+      judul = 'Jadwal belum tersedia';
+      keterangan = galat!;
+      ikon = Icons.cloud_off_outlined;
+    } else if (!memuat && data != null) {
+      if (data.sedang != null) {
+        judul = 'Sedang mengajar ${data.sedang!.sub}';
+        keterangan =
+            'Kelas ${data.sedang!.label} • ${data.sedang!.mulai}–${data.sedang!.selesai}';
+        ikon = Icons.co_present;
+      } else if (data.kelasSekarang != null) {
+        judul = 'Kelas Anda: ${data.kelasSekarang!.label}';
+        keterangan =
+            '${data.kelasSekarang!.rombel} • ${data.kelasSekarang!.mulai}–${data.kelasSekarang!.selesai}'
+            '${data.kelasSekarang!.sub.isNotEmpty ? ' • ${data.kelasSekarang!.sub}' : ''}';
+        ikon = Icons.meeting_room;
+      } else if (data.berikutnya != null) {
+        judul = 'Berikutnya: ${data.berikutnya!.sub}';
+        keterangan =
+            'Kelas ${data.berikutnya!.label} • mulai ${data.berikutnya!.mulai}';
+        ikon = Icons.upcoming;
+      } else {
+        judul = 'Tidak ada jadwal saat ini';
+        keterangan = 'Tidak ada lagi jadwal mengajar hari ini.';
+        ikon = Icons.event_available;
+      }
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          gradient: LinearGradient(
+            colors: [tema.colorScheme.primary, tema.colorScheme.tertiary],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: tema.colorScheme.primary.withValues(alpha: 0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                  child: Text(
+                    data == null
+                        ? 'JADWAL HARI INI'
+                        : '${data.namaHari.toUpperCase()} • ${data.tanggal.toUpperCase()}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Icon(ikon, color: Colors.white, size: 26),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Text(
+              judul,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 19,
+                fontWeight: FontWeight.w800,
+                height: 1.25,
+              ),
+            ),
+            if (keterangan.isNotEmpty) ...[
+              const SizedBox(height: 5),
+              Text(
+                keterangan,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.88),
+                  fontSize: 13.5,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            const Row(
+              children: [
+                Text(
+                  'Buka Jadwal Pelajaran',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+                SizedBox(width: 6),
+                Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuCepat extends StatelessWidget {
+  const _MenuCepat({
     required this.ikon,
     required this.judul,
     required this.keterangan,
@@ -142,41 +380,39 @@ class _MenuKartu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tema = Theme.of(context);
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: tema.colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(ikon,
-                    size: 28, color: tema.colorScheme.onPrimaryContainer),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      judul,
-                      style: tema.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    Text(keterangan),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right),
-            ],
+    return KartuModern(
+      onTap: onTap,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: tema.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              ikon,
+              size: 22,
+              color: tema.colorScheme.onPrimaryContainer,
+            ),
           ),
-        ),
+          const SizedBox(height: 10),
+          Text(
+            judul,
+            style: tema.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          Text(
+            keterangan,
+            style: tema.textTheme.bodySmall?.copyWith(
+              color: tema.colorScheme.onSurfaceVariant,
+              fontSize: 11,
+            ),
+          ),
+        ],
       ),
     );
   }
